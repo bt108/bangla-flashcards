@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bangla Flashcards</title>
+<style>
+  :root{
+    --bg:#faf8f2; --ink:#1e1b16; --muted:#6b6257; --card:#ffffff;
+    --accent:#1d5c3f; --accent-ink:#ffffff; --line:#e4dccb;
+    --warn:#8a3b2e; --card-font:"Noto Serif Bengali", serif; --card-size:56px;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:Georgia,"Noto Serif Bengali","Noto Sans Bengali",serif;
+    line-height:1.6;
+  }
+  main{max-width:760px;margin:0 auto;padding:24px 20px 90px}
+  h1{font-size:28px;margin:8px 0 4px}
+  .sub{color:var(--muted);margin:0 0 20px}
+  .screen{display:none}
+  .screen.active{display:block}
+  .deck{border:1px solid var(--line);background:var(--card);border-radius:12px;
+    padding:14px 16px;margin:10px 0;display:flex;align-items:center;gap:12px}
+  .deck .grow{flex:1}
+  .deck .name{font-weight:bold;font-size:18px}
+  .deck .meta{color:var(--muted);font-size:14px}
+  button{font:inherit;cursor:pointer;border-radius:10px;border:1px solid var(--line);
+    background:#fff;color:var(--ink);padding:9px 16px}
+  button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+  button.danger{color:var(--warn);border-color:#d9b6ae}
+  button:disabled{opacity:.5;cursor:default}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  textarea{width:100%;min-height:140px;font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink)}
+  input[type=text]{font:inherit;padding:9px 12px;border:1px solid var(--line);border-radius:10px;width:100%;background:#fff;color:var(--ink)}
+  .panel{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:16px;margin:14px 0}
+  .hint{font-size:14px;color:var(--muted)}
+  .flashcard{background:var(--card);border:1px solid var(--line);border-radius:16px;
+    padding:48px 28px;margin:18px 0;text-align:center;min-height:240px;
+    display:flex;flex-direction:column;justify-content:center;gap:18px}
+  .flashcard .side{font-family:var(--card-font);font-size:var(--card-size);line-height:1.9;white-space:pre-wrap;overflow-wrap:break-word}
+  .flashcard .label{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-family:inherit}
+  .progress{color:var(--muted)}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:14px 0}
+  .stat{border:1px solid var(--line);border-radius:10px;padding:10px;background:#fff;text-align:center}
+  .stat b{display:block;font-size:22px}
+  #fontbar{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);
+    padding:8px 16px;display:flex;gap:14px;align-items:center;justify-content:center;flex-wrap:wrap;font-size:14px}
+  #fontbar input[type=text]{width:220px;padding:6px 10px}
+  #fontbar select{font:inherit;padding:6px 10px;border:1px solid var(--line);border-radius:10px;max-width:260px;background:#fff;color:var(--ink)}
+  .err{color:var(--warn);white-space:pre-wrap}
+  .ok{color:var(--accent)}
+  body.focus h1,body.focus .sub,body.focus #fontbar{display:none}
+  #screen-study.focus #study-topbar{justify-content:center;gap:12px}
+  #screen-study.focus #study-progress{font-size:13px}
+  #screen-study.focus .flashcard{min-height:240px}
+</style>
+</head>
+<body>
+<main>
+  <h1>Bangla Flashcards</h1>
+  <p class="sub">Offline Leitner decks &middot; English &harr; Bangla</p>
+
+  <!-- DECK LIST -->
+  <section id="screen-decks" class="screen active" aria-label="Deck list">
+    <div id="decklist"></div>
+    <div class="panel">
+      <h2 style="margin-top:0">Add deck</h2>
+      <p class="hint">Deck format: blank line separates cards. One line exactly <code>--</code> splits
+      front from back. Either side may span several lines. A line starting with <code>#</code> is a
+      comment when it appears before any card content in its block (handy for headers); anywhere else
+      it is literal text. Files may use LF or CRLF. Fronts must be unique within a deck.</p>
+      <div class="row" style="margin-bottom:10px">
+        <input type="text" id="add-name" placeholder="Deck name" aria-label="Deck name">
+      </div>
+      <textarea id="add-text" placeholder="Front text&#10;--&#10;Back text&#10;&#10;Next front&#10;--&#10;Next back" aria-label="Deck text"></textarea>
+      <div class="row" style="margin-top:10px">
+        <button id="add-save" class="primary">Save deck</button>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <label>Unified import (.txt deck or .json backup) <input type="file" id="unified-import" accept=".txt,.md,.text,.srs,.deck,.json,application/json,text/plain" aria-label="Unified import deck or backup file"></label>
+      </div>
+      <p id="add-msg" class="hint"></p>
+    </div>
+  </section>
+
+  <!-- START -->
+  <section id="screen-start" class="screen" aria-label="Start study">
+    <div class="row"><button id="start-back">&larr; Decks</button></div>
+    <div class="panel">
+      <h2 id="start-title" style="margin-top:0">Deck</h2>
+      <p id="start-counts" class="hint"></p>
+      <fieldset>
+        <legend>Mode</legend>
+        <label><input type="radio" name="mode" value="shuffled" checked> Shuffled (default)</label><br>
+        <label><input type="radio" name="mode" value="ordered"> In-order</label>
+      </fieldset>
+      <div class="row" style="margin-top:12px">
+        <button id="start-begin" class="primary">Begin</button>
+      </div>
+      <p id="start-msg" class="hint"></p>
+    </div>
+  </section>
+
+  <!-- STUDY -->
+  <section id="screen-study" class="screen" aria-label="Study">
+    <div class="row" id="study-topbar" style="justify-content:space-between">
+      <span id="study-progress" class="progress">Card 1/1</span>
+      <span class="row">
+        <button id="study-focus" title="Focus mode (F)">Focus (F)</button>
+        <button id="study-unfocus" title="Exit focus mode (F)" hidden>Exit focus (F)</button>
+        <button id="study-quit" title="Save and quit (Esc)">Quit (Esc)</button>
+      </span>
+    </div>
+    <div class="flashcard">
+      <div class="label" id="card-label">Front</div>
+      <div class="side" id="card-front"></div>
+      <div class="side" id="card-back" hidden></div>
+    </div>
+    <div class="row" id="study-controls" style="justify-content:center">
+      <button id="btn-show" class="primary">Show Answer (Space)</button>
+      <button id="btn-known" hidden>Known (1)</button>
+      <button id="btn-hard" hidden>Hard (2)</button>
+      <button id="btn-unknown" hidden>Unknown (3)</button>
+    </div>
+  </section>
+
+  <!-- SUMMARY -->
+  <section id="screen-summary" class="screen" aria-label="Summary">
+    <h2 id="summary-title">Session complete</h2>
+    <div class="stats">
+      <div class="stat"><b id="st-reviewed">0</b>Reviewed</div>
+      <div class="stat"><b id="st-known">0</b>Known</div>
+      <div class="stat"><b id="st-hard">0</b>Hard</div>
+      <div class="stat"><b id="st-unknown">0</b>Unknown</div>
+      <div class="stat"><b id="st-acc">0%</b>Accuracy</div>
+      <div class="stat"><b id="st-due24">0</b>Due in 24h</div>
+    </div>
+    <div class="panel"><h3 style="margin-top:0">Boxes</h3><p id="st-boxes" class="hint"></p></div>
+    <div class="row">
+      <button id="summary-again" class="primary">Study Again</button>
+      <button id="summary-decks">Deck list</button>
+    </div>
+  </section>
+</main>
+
+<footer id="fontbar" aria-label="Typography settings">
+  <label>Font <select id="font-family" aria-label="Card font family">
+    <option value="Noto Serif Bengali">Noto Serif Bengali</option>
+    <option value="Noto Sans Bengali">Noto Sans Bengali</option>
+    <option value="serif">serif</option>
+    <option value="sans-serif">sans-serif</option>
+    <option value="monospace">monospace</option>
+  </select></label>
+  <label>Size <input type="range" id="font-size" min="16" max="120" step="1" aria-label="Card font size">
+  <span id="font-size-val"></span></label>
+</footer>
+
+<script>
+"use strict";
+/* =====================================================================
+   Bangla Flashcards — single-file offline app.
+   ---------------------------------------------------------------------
+   DECK FORMAT ("flashdeck-v1", documented for users):
+     - Plain text, LF or CRLF line endings.
+     - One or more blank lines (empty / whitespace-only) separate cards.
+     - Inside a card, exactly one line whose trimmed text is `--`
+       separates the FRONT (lines above) from the BACK (lines below).
+     - Either side may span multiple lines (internal newlines kept).
+     - Comment rule: within a card block, leading lines whose first
+       non-space character is `#` are ignored. A block containing only
+       comments/whitespace is skipped entirely (so `#` header comments
+       at the top of a file work). A `#` line AFTER real card content
+       is literal card text, not a comment.
+     - Front text (trimmed) is the card's identity and must be unique
+       within a deck.
+     - Any violation rejects the WHOLE import with an error naming the
+       deck plus the card's line range, e.g.
+       `Deck "My Deck": card 3 (lines 12-15): missing "--" separator.`
+   BACKUP FORMAT ("flashbackup", versioned):
+     - One JSON file per deck: exactly
+       { "format": 1, "name": <string>, "text": <deck text>,
+         "state": <srs state object>, "exportedAt": <epoch ms> }
+     - Import requires format === 1, re-validates the deck text with
+       the same parser (rejecting bad files), and restores the state.
+   SRS ("leitner-5"):
+     - 5 boxes, review intervals [1,3,7,14,30] days by box.
+     - At most 20 NEW cards introduced per calendar day (local time).
+       The counter increments when a new card is first PRESENTED (shown),
+       before grading — even if the user quits right after. When the next
+       card to present is new and 20 were already introduced today, the
+       app asks once per session whether to learn the remaining new
+       cards too (continue), study due cards only (dropping the rest),
+       or quit the session.
+     - Queue = ALL due cards + ALL new cards (shuffled by default,
+       or deck order in "in-order" mode). Single pass, no re-queue.
+     - Known -> box+1 (max 5). Hard -> box-1 (min 1). Unknown -> box 1.
+       New cards count as box 1 before grading. Next due = now +
+       interval[newBox] days (so Unknown / Hard-from-new => tomorrow).
+     - The per-card state {box, due} plus the daily-new counter is
+       persisted to IndexedDB after every grade and on quit.
+   ===================================================================== */
+
+const INTERVALS_DAYS = [1, 3, 7, 14, 30];
+const NEW_PER_DAY = 20;
+const DAY_MS = 86400000;
+
+/* ---------------- pure core (DOM-free, tested headlessly) ---------------- */
+
+function todayString(nowMs) {
+  const d = new Date(nowMs);
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return d.getFullYear() + "-" + m + "-" + day;
+}
+
+function makeEmptyState() {
+  return { entries: {}, newDay: "", newCount: 0 };
+}
+
+function normalizeState(s) {
+  const st = (s && typeof s === "object") ? s : {};
+  const entries = {};
+  if (st.entries && typeof st.entries === "object") {
+    for (const k of Object.keys(st.entries)) {
+      const e = st.entries[k];
+      if (e && Number.isFinite(+e.box) && Number.isFinite(+e.due)) {
+        entries[k] = { box: Math.min(5, Math.max(1, Math.round(+e.box))), due: +e.due };
+      }
+    }
+  }
+  return { entries, newDay: typeof st.newDay === "string" ? st.newDay : "",
+           newCount: Number.isFinite(+st.newCount) && +st.newCount >= 0 ? Math.floor(+st.newCount) : 0 };
+}
+
+/* Parse deck text. Returns [{front, back}]. Throws Error naming deck + line range. */
+function parseDeckText(text, deckName) {
+  const name = (deckName == null || deckName === "") ? "deck" : String(deckName);
+  const norm = String(text == null ? "" : text).replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const lines = norm.split("\n");
+  // Split into blocks of consecutive non-blank lines, tracking 1-based line numbers.
+  const blocks = [];
+  let i = 0;
+  while (i < lines.length) {
+    if (lines[i].trim() === "") { i++; continue; }
+    const start = i + 1; // 1-based
+    const chunk = [];
+    while (i < lines.length && lines[i].trim() !== "") { chunk.push(lines[i]); i++; }
+    blocks.push({ chunk, start, end: i }); // end = 1-based last non-blank line
+  }
+  const cards = [];
+  const seen = new Map(); // front -> card number
+  let cardNo = 0;
+  for (const b of blocks) {
+    // Strip leading comment lines (first non-space char '#').
+    let k = 0;
+    while (k < b.chunk.length && b.chunk[k].trimStart().startsWith("#")) k++;
+    if (k === b.chunk.length) continue; // comment/whitespace-only block: skip
+    const content = b.chunk.slice(k);
+    const cStart = b.start + k;
+    const cEnd = b.end;
+    cardNo++;
+    const err = (msg) => new Error('Deck "' + name + '": card ' + cardNo +
+      " (lines " + cStart + "-" + cEnd + "): " + msg);
+    const seps = [];
+    for (let j = 0; j < content.length; j++) {
+      if (content[j].trim() === "--") seps.push(j);
+    }
+    if (seps.length === 0) throw err('missing "--" separator between front and back.');
+    if (seps.length > 1) throw err('multiple "--" separators; each card needs exactly one.');
+    const front = content.slice(0, seps[0]).join("\n").trim();
+    const back = content.slice(seps[0] + 1).join("\n").trim();
+    if (!front) throw err("empty front (no text before \"--\").");
+    if (!back) throw err("empty back (no text after \"--\").");
+    if (seen.has(front)) {
+      const first = seen.get(front);
+      const preview = front.length > 60 ? front.slice(0, 60) + "…" : front;
+      throw new Error('Deck "' + name + '": duplicate front "' + preview +
+        '" (card ' + cardNo + ", lines " + cStart + "-" + cEnd +
+        "; first seen on card " + first + ").");
+    }
+    seen.set(front, cardNo);
+    cards.push({ front, back });
+  }
+  return cards;
+}
+
+function classifyCards(cards, state, nowMs) {
+  const st = normalizeState(state);
+  const due = [], fresh = [], future = [];
+  for (const c of cards) {
+    const e = st.entries[c.front];
+    if (!e) fresh.push(c);
+    else if (e.due <= nowMs) due.push(c);
+    else future.push(c);
+  }
+  return { due, fresh, future };
+}
+
+/* How many new cards may still be introduced today. (Kept as a pure helper;
+   the study flow now enforces the cap at introduction time instead.) */
+function newBudgetFor(state, nowMs, extraNew) {
+  const st = normalizeState(state);
+  const today = todayString(nowMs);
+  const used = (st.newDay === today) ? st.newCount : 0;
+  return Math.max(0, NEW_PER_DAY - used + (extraNew || 0));
+}
+
+/* Build the single-pass study queue with ALL due + ALL new cards (shuffled
+   by default, deck order in "in-order" mode). The daily new-card cap is
+   enforced at introduction time (first presentation), never by trimming
+   here. Returns {queue, dueCount, newCount, skippedNew, futureCount}
+   (skippedNew is always 0; kept for shape compatibility). */
+function selectQueue(cards, state, nowMs, opts) {
+  const o = opts || {};
+  const mode = o.mode === "ordered" ? "ordered" : "shuffled";
+  const cls = classifyCards(cards, state, nowMs);
+  let queue;
+  if (mode === "ordered") {
+    const wanted = new Set();
+    for (const c of cls.due) wanted.add(c.front);
+    for (const c of cls.fresh) wanted.add(c.front);
+    queue = cards.filter((c) => wanted.has(c.front));
+  } else {
+    queue = cls.due.concat(cls.fresh);
+    const rnd = typeof o.random === "function" ? o.random : Math.random;
+    for (let j = queue.length - 1; j > 0; j--) {
+      const r = Math.floor(rnd() * (j + 1));
+      const t = queue[j]; queue[j] = queue[r]; queue[r] = t;
+    }
+  }
+  return { queue, dueCount: cls.due.length, newCount: cls.fresh.length,
+           skippedNew: 0, futureCount: cls.future.length };
+}
+
+/* Count one newly introduced card. Called exactly when a NEW card is first
+   presented (shown), before grading. Rolls the counter on date change.
+   Pure: returns the next state object. */
+function noteNewIntroduced(state, nowMs) {
+  const st = normalizeState(state);
+  const today = todayString(nowMs);
+  if (st.newDay !== today) return { entries: st.entries, newDay: today, newCount: 1 };
+  return { entries: st.entries, newDay: st.newDay, newCount: st.newCount + 1 };
+}
+
+/* Grade one card. Pure: returns the next state object. rating in {known, hard, unknown}.
+   Grading never touches the daily-new counter: new cards are counted at
+   first presentation (noteNewIntroduced), before grading. */
+function gradeState(state, front, rating, nowMs) {
+  if (rating !== "known" && rating !== "hard" && rating !== "unknown") {
+    throw new Error("unknown rating: " + rating);
+  }
+  const st = normalizeState(state);
+  const prev = st.entries[front];
+  const oldBox = prev ? prev.box : 1;
+  let nb;
+  if (rating === "known") nb = Math.min(5, oldBox + 1);
+  else if (rating === "hard") nb = Math.max(1, oldBox - 1);
+  else nb = 1;
+  const entries = Object.assign({}, st.entries);
+  entries[front] = { box: nb, due: nowMs + INTERVALS_DAYS[nb - 1] * DAY_MS };
+  return { entries, newDay: st.newDay, newCount: st.newCount };
+}
+
+function boxCounts(cards, state) {
+  const st = normalizeState(state);
+  const counts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, fresh: 0 };
+  for (const c of cards) {
+    const e = st.entries[c.front];
+    if (!e) counts.fresh++;
+    else counts[e.box]++;
+  }
+  return counts;
+}
+
+function dueWithinMs(cards, state, nowMs, windowMs) {
+  const st = normalizeState(state);
+  let n = 0;
+  for (const c of cards) {
+    const e = st.entries[c.front];
+    if (e && e.due <= nowMs + windowMs) n++;
+  }
+  return n;
+}
+
+function accuracy(tally) {
+  const total = (tally.known || 0) + (tally.hard || 0) + (tally.unknown || 0);
+  if (!total) return 0;
+  return (tally.known || 0) / total;
+}
+
+/* Validate an imported backup object. Returns {name, text, state}. Throws on bad format. */
+function parseBackup(obj) {
+  if (!obj || typeof obj !== "object") throw new Error("Backup: not a JSON object.");
+  if (obj.format !== 1) throw new Error("Backup: unsupported format (expected format: 1).");
+  if (typeof obj.name !== "string" || !obj.name.trim()) throw new Error("Backup: missing deck name.");
+  if (typeof obj.text !== "string") throw new Error("Backup: missing deck text.");
+  return { name: obj.name.trim(), text: obj.text, state: normalizeState(obj.state) };
+}
+
+const STARTER_TEXT = "# Bangla starter flashcards: basic English to Bangla vocabulary.\n# Front is the English word; back is `Bangla (translit)`.\n# Cards are separated by blank lines. A separator line of two hyphens\n# splits front from back. Fronts are unique within the deck.\n# Contents: 50 common words.\n\nHello\n--\nহ্যালো (hyalo)\n\nThank you\n--\nধন্যবাদ (dhonnobad)\n\nYes\n--\nহ্যাঁ (hyan)\n\nNo\n--\nনা (na)\n\nWater\n--\nপানি (pani)\n\nRice\n--\nভাত (bhat)\n\nFood\n--\nখাবার (khabar)\n\nTea\n--\nচা (cha)\n\nMilk\n--\nদুধ (dudh)\n\nBread\n--\nরুটি (ruti)\n\nFish\n--\nমাছ (machh)\n\nMeat\n--\nমাংস (mangsho)\n\nEgg\n--\nডিম (dim)\n\nFruit\n--\nফল (fol)\n\nMoney\n--\nটাকা (taka)\n\nHouse\n--\nবাড়ি (bari)\n\nSchool\n--\nস্কুল (skul)\n\nBook\n--\nবই (boi)\n\nPen\n--\nকলম (kolom)\n\nRoad\n--\nরাস্তা (rasta)\n\nCar\n--\nগাড়ি (gari)\n\nDay\n--\nদিন (din)\n\nNight\n--\nরাত (rat)\n\nMorning\n--\nসকাল (shokal)\n\nToday\n--\nআজ (aj)\n\nTomorrow\n--\nআগামীকাল (agamikal)\n\nYesterday\n--\nগতকাল (gotokal)\n\nMother\n--\nমা (ma)\n\nFather\n--\nবাবা (baba)\n\nFriend\n--\nবন্ধু (bondhu)\n\nDog\n--\nকুকুর (kukur)\n\nCat\n--\nবিড়াল (biral)\n\nTree\n--\nগাছ (gachh)\n\nFlower\n--\nফুল (ful)\n\nSun\n--\nসূর্য (shurjo)\n\nMoon\n--\nচাঁদ (chand)\n\nRain\n--\nবৃষ্টি (brishti)\n\nHot\n--\nগরম (gorom)\n\nCold\n--\nঠান্ডা (thanda)\n\nBig\n--\nবড় (boro)\n\nSmall\n--\nছোট (chhoto)\n\nGood\n--\nভালো (bhalo)\n\nBad\n--\nখারাপ (kharap)\n\nNew\n--\nনতুন (notun)\n\nOld\n--\nপুরনো (purono)\n\nOne\n--\nএক (ek)\n\nTwo\n--\nদুই (dui)\n\nThree\n--\nতিন (tin)\n\nFour\n--\nচার (char)\n\nFive\n--\nপাঁচ (panch)\n";
+
+const STARTER_NAME = "Starter — English to Bangla";
+
+/* Builtin decks shipped inside this file (fully offline, no fetching).
+   Texts are the verbatim contents of bangla_letters.txt / bangla_combined.txt;
+   `<` is escaped as \u003c so the HTML parser never sees a script-close sequence. */
+const BUILTIN_DECKS = [
+  { name: STARTER_NAME, text: STARTER_TEXT },
+  { name: "Bangla Letters", text: "# Bangla letters deck for flash.sh\n# Front shows ONLY the Bangla shape (bare letter or sign), no roman text.\n# Back has three plain-text lines: 1. IAST / colloquial 2. articulation (varga place + manner; vowels short/long) 3. example triple Bangla + IAST / colloquial + gloss.\n# Cards are separated by blank lines. A separator line of two hyphens splits front from back.\n# Contents: 11 vowels, 36 consonants, 10 vowel signs, plus anusvara visarga chandrabindu.\n# Total: 60 cards.\n\nঅ\n--\na / o\nVowel, short\nঅনল — anala / onol — fire\n\nআ\n--\nā / a\nVowel, long\nআম — āma / am — mango\n\nই\n--\ni / i\nVowel, short\nইট — iṭa / iṭ — brick\n\nঈ\n--\nī / i\nVowel, long\nঈগল — īgala / igol — eagle\n\nউ\n--\nu / u\nVowel, short\nউট — uṭa / uṭ — camel\n\nঊ\n--\nū / u\nVowel, long\nঊষা — ūṣā / usha — dawn\n\nঋ\n--\nṛ / ri\nVocalic r, pronounced \"ri\" in Bangla\nঋণ — ṛṇa / rin — debt\n\nএ\n--\ne / e\nVowel, long\nএক — eka / ek — one\n\nঐ\n--\nai / oi\nVowel, diphthong (long)\nঐক্য — aikya / oikko — unity\n\nও\n--\no / o\nVowel, long\nওজন — ojana / ojon — weight\n\nঔ\n--\nau / ou\nVowel, diphthong (long)\nঔষধ — auṣadha / oshudh — medicine\n\nক\n--\nka / ko\nVelar (kaṇṭhya — throat), voiceless unaspirated stop\nকলম — kalama / kolom — pen\n\nখ\n--\nkha / kho\nVelar (kaṇṭhya — throat), voiceless aspirated stop\nখাতা — khātā / khata — notebook\n\nগ\n--\nga / go\nVelar (kaṇṭhya — throat), voiced unaspirated stop\nগাছ — gācha / gachh — tree\n\nঘ\n--\ngha / gho\nVelar (kaṇṭhya — throat), voiced aspirated stop\nঘর — ghara / ghor — house, room\n\nঙ\n--\nṅa / ng\nVelar (kaṇṭhya — throat) nasal\nরং — raṃ / rong — colour\n\nচ\n--\nca / co\nPalatal (tālavya — palate), voiceless unaspirated stop\nচা — cā / cha — tea\n\nছ\n--\ncha / chho\nPalatal (tālavya — palate), voiceless aspirated stop\nছাতা — chātā / chhata — umbrella\n\nজ\n--\nja / jo\nPalatal (tālavya — palate), voiced unaspirated stop\nজল — jala / jol — water\n\nঝ\n--\njha / jho\nPalatal (tālavya — palate), voiced aspirated stop\nঝড় — jhaṛa / jhor — storm\n\nঞ\n--\nña / n\nPalatal (tālavya — palate) nasal\nমিঞা — miñā / mia — mister, sir\n\nট\n--\nṭa / ṭo\nRetroflex (mūrdhanya — roof of the mouth) (cerebral), voiceless unaspirated stop\nটাকা — ṭākā / ṭaka — taka, money\n\nঠ\n--\nṭha / ṭho\nRetroflex (mūrdhanya — roof of the mouth) (cerebral), voiceless aspirated stop\nঠোঁট — ṭhoṃṭa / ṭhõṭ — lips, beak\n\nড\n--\nḍa / ḍo\nRetroflex (mūrdhanya — roof of the mouth) (cerebral), voiced unaspirated stop\nডাল — ḍāla / ḍal — lentils, branch\n\nঢ\n--\nḍha / ḍho\nRetroflex (mūrdhanya — roof of the mouth) (cerebral), voiced aspirated stop\nঢাকা — ḍhākā / ḍhaka — Dhaka\n\nণ\n--\nṇa / n\nRetroflex (mūrdhanya — roof of the mouth) nasal\nবীণা — vīṇā / bina — veena\n\nত\n--\nta / to\nDental (dantya — teeth), voiceless unaspirated stop\nতালা — tālā / tala — lock\n\nথ\n--\ntha / tho\nDental (dantya — teeth), voiceless aspirated stop\nথালা — thālā / thala — plate\n\nদ\n--\nda / do\nDental (dantya — teeth), voiced unaspirated stop\nদরজা — darajyā / dorja — door\n\nধ\n--\ndha / dho\nDental (dantya — teeth), voiced aspirated stop\nধান — dhāna / dhan — paddy, rice\n\nন\n--\nna / no\nDental (dantya — teeth) nasal\nনদী — nadī / nodi — river\n\nপ\n--\npa / po\nLabial (oṣṭhya — lips), voiceless unaspirated stop\nপানি — pāni / pani — water\n\nফ\n--\npha / fo\nLabial (oṣṭhya — lips), voiceless aspirated stop\nফল — phala / phol — fruit\n\nব\n--\nva / bo\nLabial (oṣṭhya — lips) approximant, pronounced b in Bangla\nবই — vai / boi — book\n\nভ\n--\nbha / bho\nLabial (oṣṭhya — lips), voiced aspirated stop\nভাত — bhāta / bhat — cooked rice, meal\n\nম\n--\nma / mo\nLabial (oṣṭhya — lips) nasal\nমাছ — mācha / machh — fish\n\nয\n--\nya / jo\nPalatal (tālavya — palate) approximant, pronounced j at word start\nযাওয়া — yāoẏā / jaoa — to go\n\nর\n--\nra / ro\nRetroflex (mūrdhanya — roof of the mouth) approximant\nরাত — rāta / rat — night\n\nল\n--\nla / lo\nDental (dantya — teeth) approximant\nলাল — lāla / lal — red\n\nশ\n--\nśa / sho\nPalatal (tālavya — palate) sibilant (all শ ষ স sound like \"sh\" in Bangla)\nশাপলা — śāpalā / shapla — water-lily\n\nষ\n--\nṣa / sho\nRetroflex (mūrdhanya — roof of the mouth) sibilant (all শ ষ স sound like \"sh\" in Bangla)\nষাঁড় — ṣāṃṛa / shãr — bull\n\nস\n--\nsa / sho\nDental (dantya — teeth) sibilant (all শ ষ স sound like \"sh\" in Bangla)\nসকাল — sakāla / shokal — morning\n\nহ\n--\nha / ho\nGlottal fricative\nহাত — hāta / hat — hand\n\nড়\n--\nṛa / ro\nRetroflex (mūrdhanya — roof of the mouth) flap, voiced\nগাড়ি — gāṛi / gari — car\n\nঢ়\n--\nṛha / rho\nRetroflex (mūrdhanya — roof of the mouth) flap, voiced aspirated\nগাঢ় — gāṛha / garh — dense, deep\n\nয়\n--\nẏa / y\nPalatal (tālavya — palate) approximant (khanda-y)\nছায়া — chāẏā / chhaya — shadow\n\nৎ\n--\nt / t\nDental (dantya — teeth) stop (khanda-t, always final)\nহঠাৎ — haṭhāt / hoṭhat — suddenly\n\nা\n--\nā / a\nSign of vowel আ, long; takes consonant form (ক + া = কা)\nবাবা — bābā / baba — father\n\nি\n--\ni / i\nSign of vowel ই, short; takes consonant form (ক + ি = কি)\nদিন — dina / din — day\n\nী\n--\nī / i\nSign of vowel ঈ, long; takes consonant form (ক + ী = কী)\nনদী — nadī / nodi — river\n\nু\n--\nu / u\nSign of vowel উ, short; takes consonant form (ক + ু = কু)\nকুকুর — kukura / kukur — dog\n\nূ\n--\nū / u\nSign of vowel ঊ, long; takes consonant form (ক + ূ = কূ)\nদূর — dūra / dur — far\n\nৃ\n--\nṛ / ri\nSign of vowel ঋ, vocalic r; takes consonant form (ক + ৃ = কৃ)\nকৃষক — kṛṣaka / krishok — farmer\n\nে\n--\ne / e\nSign of vowel এ, long; takes consonant form (ক + ে = কে)\nমেয়ে — meye / meye — girl\n\nৈ\n--\nai / oi\nSign of vowel ঐ, diphthong; takes consonant form (ক + ৈ = কৈ)\nবৈশাখ — vaiśākha / boishakh — first Bengali month\n\nো\n--\no / o\nSign of vowel ও, long; takes consonant form (ক + ো = কো)\nছোট — choṭa / chhoṭo — small\n\nৌ\n--\nau / ou\nSign of vowel ঔ, diphthong; takes consonant form (ক + ৌ = কৌ)\nমৌমাছি — maumāchi / moumachhi — honeybee\n\nং\n--\nṃ / ng\nNasal marker: anusvara, nasalizes the vowel (pronounced ng/n)\nরং — raṃ / rong — colour\n\nঃ\n--\nḥ / h\nGlottal marker: visarga, rare, pronounced h\nদুঃখ — duḥkha / dukkho — sorrow\n\nঁ\n--\nm̐ / nasalized vowel\nNasal marker: chandrabindu, nasalizes the vowel\nচাঁদ — cāṃda / chãd — moon\n" },
+  { name: "Bangla Combined Forms", text: "# Bangla combined and special forms deck for flash.sh (যুক্তাক্ষর ও ফলা)\n# Front shows ONLY the Bangla form itself (conjunct or phala shape), no roman text. Reph uses র্ক since bare র্ is nearly invisible.\n# Back has three plain-text lines: 1. Bangla name + composition 2. IAST / colloquial of the form 3. example triple Bangla + IAST / colloquial + gloss.\n# Cards are separated by blank lines. A separator line of two hyphens splits front from back.\n# Contents: 6 phala + reph, ক্ষ, জ্ঞ, and 72 common clusters = 81 cards.\n\nদ্য\n--\nয-ফলা — দ + য = দ্য\ndya / dya\nবিদ্যা — vidyā / bidya — learning, knowledge\n\nপ্র\n--\nর-ফলা — প + র = প্র\npra / pra\nপ্রাণ — prāṇa / pran — life\n\nস্ব\n--\nব-ফলা — স + ব = স্ব\nsva / sho\nস্বর — svara / shor — vowel, voice, sound\n\nগ্ম\n--\nম-ফলা — গ + ম = গ্ম\ngma / gmo\nযুগ্ম — yugma / jugmo — pair, couple\n\nহ্ন / হ্ণ\n--\nন-ফলা ও ণ-ফলা — হ + ন = হ্ন; হ + ণ = হ্ণ\nhna / hno; hṇa / hṇo\nচিহ্ন — cihna / chinho — mark, sign; অপরাহ্ণ — aparāhṇa / oporahno — afternoon\n\nম্ল\n--\nল-ফলা — ম + ল = ম্ল\nmla / mlo\nঅম্ল — amla / omlo — sour, acid\n\nর্ক\n--\nরেফ — র + ক = র্ক\nrka / rko\nকর্ম — karma / kormo — work, deed\n\nক্ষ\n--\nক + ষ = ক্ষ\nkṣa / kkha\nক্ষমা — kṣamā / khoma — forgiveness\n\nজ্ঞ\n--\nজ + ঞ = জ্ঞ\njña / gga\nজ্ঞান — jñāna / ggan — knowledge\n\nত্র\n--\nত + র = ত্র\ntra / tro\nপত্র — patra / potro — letter\n\nশ্র\n--\nশ + র = শ্র\nśra / sro\nশ্রম — śrama / srom — labour\n\nস্ত\n--\nস + ত = স্ত\nsta / sto\nরাস্তা — rāstā / rasta — road\n\nস্প\n--\nস + প = স্প\nspa / spo\nস্পর্শ — sparśa / sporsho — touch\n\nস্ফ\n--\nস + ফ = স্ফ\nspha / spho\nবিস্ফোরণ — visphoraṇa / bishphoron — explosion\n\nস্ক\n--\nস + ক = স্ক\nska / sko\nস্কুল — skula / skul — school\n\nষ্ট\n--\nষ + ট = ষ্ট\nṣṭa / ṣṭo\nকষ্ট — kaṣṭa / koshto — suffering, pain\n\nষ্ঠ\n--\nষ + ঠ = ষ্ঠ\nṣṭha / ṣṭho\nকণ্ঠ — kaṇṭha / kontho — throat, voice\n\nঙ্ক\n--\nঙ + ক = ঙ্ক\nṅka / ngko\nঅঙ্ক — aṅka / ongko — number, mathematics\n\nঙ্গ\n--\nঙ + গ = ঙ্গ\nṅga / nggo\nবাংলা — bāṅlā / bangla — Bengali\n\nঞ্চ\n--\nঞ + চ = ঞ্চ\nñca / nco\nঅঞ্চল — añcala / oncol — region, area\n\nন্ত\n--\nন + ত = ন্ত\nnta / nto\nকিন্তু — kintu / kintu — but\n\nন্দ\n--\nন + দ = ন্দ\nnda / ndo\nসুন্দর — sundara / shundor — beautiful\n\nন্ধ\n--\nন + ধ = ন্ধ\nndha / ndho\nবন্ধু — bandhu / bondhu — friend\n\nম্প\n--\nম + প = ম্প\nmpa / mpo\nসম্পদ — sampada / shompod — wealth, resources\n\nম্ভ\n--\nম + ভ = ম্ভ\nmbha / mbho\nসম্ভব — sambhava / shombhob — possible\n\nম্ম\n--\nম + ম = ম্ম\nmma / mmo\nসম্মান — sammāna / shomman — respect, honour\n\nন্ত্র\n--\nন + ত + র = ন্ত্র\nntra / ntro\nযন্ত্র — yantra / jontro — machine\n\nস্ম\n--\nস + ম = স্ম\nsma / smo\nস্মৃতি — smṛti / smriti — memory\n\nহ্ম\n--\nহ + ম = হ্ম\nhma / hmo\nব্রাহ্মণ — brāhmaṇa / brahmon — Brahmin\n\nদ্ধ\n--\nদ + ধ = দ্ধ\nddha / ddho\nবুদ্ধি — buddhi / buddhi — intellect\n\nগ্ধ\n--\nগ + ধ = গ্ধ\ngdha / gdho\nমুগ্ধ — mugdha / mugdho — enchanted\n\nক্ত\n--\nক + ত = ক্ত\nkta / kto\nরক্ত — rakta / rokto — blood\n\nক্য\n--\nক + য = ক্য\nkya / kko\nবাক্য — vākya / bakko — sentence\n\nক্র\n--\nক + র = ক্র\nkra / kro\nচক্র — cakra / chokro — wheel\n\nক্ল\n--\nক + ল = ক্ল\nkla / klo\nক্লান্ত — klānta / klanto — tired\n\nগ্র\n--\nগ + র = গ্র\ngra / gro\nগ্রাম — grāma / gram — village\n\nঘ্র\n--\nঘ + র = ঘ্র\nghra / ghro\nঘ্রাণ — ghrāṇa / ghran — smell\n\nঙ্খ\n--\nঙ + খ = ঙ্খ\nṅkha / ngkho\nশঙ্খ — śaṅkha / shongkho — conch shell\n\nচ্চ\n--\nচ + চ = চ্চ\ncca / ccho\nবাচ্চা — bāccā / baccha — small child\n\nচ্ছ\n--\nচ + ছ = চ্ছ\nccha / cchho\nইচ্ছা — icchā / iccha — wish\n\nজ্ব\n--\nজ + ব = জ্ব\njva / jbo\nজ্বর — jvara / jor — fever\n\nজ্য\n--\nজ + য = জ্য\njya / jjo\nরাজ্য — rājya / rajjo — state, kingdom\n\nজ্র\n--\nজ + র = জ্র\njra / jro\nবজ্র — vajra / bojro — thunderbolt\n\nজ্জ্ব\n--\nজ + জ + ব = জ্জ্ব\njjva / jjbo\nউজ্জ্বল — ujjvala / ujjol — bright\n\nট্ট\n--\nট + ট = ট্ট\nṭṭa / ṭṭo\nচট্টগ্রাম — caṭṭagrāma / chottogram — Chittagong\n\nড্ড\n--\nড + ড = ড্ড\nḍḍa / ḍḍo\nআড্ডা — āḍḍā / adda — chat, hangout\n\nণ্ট\n--\nণ + ট = ণ্ট\nṇṭa / ṇṭo\nঘণ্টা — ghaṇṭā / ghonta — bell, clock-hour\n\nণ্ঠ\n--\nণ + ঠ = ণ্ঠ\nṇṭha / ṇṭho\nকণ্ঠ — kaṇṭha / kontho — throat, voice\n\nণ্ড\n--\nণ + ড = ণ্ড\nṇḍa / ṇḍo\nগণ্ডগোল — gaṇḍagola / gondogol — mess, trouble\n\nণ্ণ\n--\nণ + ণ = ণ্ণ\nṇṇa / ṇṇo\nবিষণ্ণ — viṣaṇṇa / bishonno — sad, gloomy\n\nত্ত\n--\nত + ত = ত্ত\ntta / tto\nউত্তর — uttara / uttor — answer, north\n\nত্ব\n--\nত + ব = ত্ব\ntva / tto\nরাজত্ব — rājatva / rajotto — reign, rule\n\nত্ম\n--\nত + ম = ত্ম\ntma / tmo\nআত্মা — ātmā / atma — soul, self\n\nত্য\n--\nত + য = ত্য\ntya / tto\nসত্য — satya / shotto — truth\n\nত্থ\n--\nত + থ = ত্থ\nttha / ttho\nউত্থান — utthāna / utthan — rise, ascent\n\nদ্ব\n--\nদ + ব = দ্ব\ndva / dbo\nউদ্বেগ — udvega / udbeg — anxiety, worry\n\nদ্ভ\n--\nদ + ভ = দ্ভ\ndbha / dbho\nঅদ্ভুত — adbhuta / odbhut — strange\n\nদ্ম\n--\nদ + ম = দ্ম\ndma / dmo\nপদ্ম — padma / poddo — lotus\n\nন্ন\n--\nন + ন = ন্ন\nnna / nno\nরান্না — rānnā / ranna — cooking\n\nন্য\n--\nন + য = ন্য\nnya / nno\nধন্য — dhanya / dhonno — blessed, grateful\n\nপ্ত\n--\nপ + ত = প্ত\npta / pto\nসপ্তাহ — saptāha / shoptaho — week\n\nপ্ন\n--\nপ + ন = প্ন\npna / pno\nস্বপ্ন — svapna / shopno — dream\n\nব্দ\n--\nব + দ = ব্দ\nbda / bdo\nশব্দ — śabda / shobdo — word, sound\n\nব্য\n--\nব + য = ব্য\nbya / bbo\nব্যাখ্যা — byākhyā / bekkha — explanation\n\nব্র\n--\nব + র = ব্র\nbra / bro\nব্রত — vrata / broto — religious vow\n\nভ্র\n--\nভ + র = ভ্র\nbhra / bhro\nভ্রমণ — bhramaṇa / bhromon — travel, tour\n\nম্ন\n--\nম + ন = ম্ন\nmna / mno\nনিম্ন — nimna / nimno — low, lower\n\nল্ল\n--\nল + ল = ল্ল\nlla / llo\nচল্লিশ — calliśa / chollish — forty\n\nল্য\n--\nল + য = ল্য\nlya / llo\nমূল্য — mūlya / mullo — price, value\n\nশ্ন\n--\nশ + ন = শ্ন\nśna / shno\nপ্রশ্ন — praśna / proshno — question\n\nশ্য\n--\nশ + য = শ্য\nśya / shsho\nঅবশ্য — avaśya / oboshsho — certainly, of course\n\nষ্ণ\n--\nষ + ণ = ষ্ণ\nṣṇa / ṣṇo\nকৃষ্ণ — kṛṣṇa / krishno — Krishna\n\nষ্প\n--\nষ + প = ষ্প\nṣpa / ṣpo\nপুষ্প — puṣpa / pushpo — flower\n\nষ্ক\n--\nষ + ক = ষ্ক\nṣka / ṣko\nশুষ্ক — śuṣka / shushko — dry\n\nস্থ\n--\nস + থ = স্থ\nstha / stho\nস্থান — sthāna / sthan — place\n\nস্ন\n--\nস + ন = স্ন\nsna / sno\nস্নান — snāna / snan — bath\n\nস্ত্র\n--\nস + ত + র = স্ত্র\nstra / stro\nস্ত্রী — strī / stri — woman, wife\n\nহ্ল\n--\nহ + ল = হ্ল\nhla / hlo\nআহ্লাদ — āhlāda / ahlad — joy, delight\n\nক্ষ্য\n--\nক + ষ + য = ক্ষ্য\nkṣya / kkhyo\nলক্ষ্য — lakṣya / lokkhyo — aim, goal\n\nঞ্ছ\n--\nঞ + ছ = ঞ্ছ\nñcha / nchho\nলাঞ্ছনা — lāñchanā / lanchhona — humiliation (formal/literary)\n\nঞ্জ\n--\nঞ + জ = ঞ্জ\nñja / njo\nকুঞ্জ — kuñja / kunjo — bower, grove\n" },
+  { name: "Bangla Sentences", text: "# Bangla sentences deck: 20 common sentences with word mappings.\n# Front is the English sentence.\n# Back line 1 is `Bangla sentence (translit)`.\n# Back line 2 is a word mapping in ENGLISH word order, each mapping\n# `en = বাং (translit)` and mappings joined with ` · `, so every\n# English word’s Bangla counterpart is explicit.\n# Cards are separated by blank lines. A separator line of two hyphens\n# splits front from back. Fronts are unique within the deck.\n# Contents: 20 common sentences.\n\nMy name is Gopal\n--\nআমার নাম গোপাল (amar nam gopal)\nmy = আমার (amar) · name = নাম (nam) · Gopal = গোপাল (gopal)\n\nWhat is your name?\n--\nতোমার নাম কি? (tomar nam ki?)\nyour = তোমার (tomar) · name = নাম (nam) · what = কি (ki)\n\nHow are you?\n--\nতুমি কেমন আছো? (tumi kemon achho?)\nyou = তুমি (tumi) · how = কেমন (kemon) · are = আছো (achho)\n\nI am fine\n--\nআমি ভালো আছি (ami bhalo achhi)\nI = আমি (ami) · fine = ভালো (bhalo) · am = আছি (achhi)\n\nGood morning\n--\nশুভ সকাল (shubho shokal)\ngood = শুভ (shubho) · morning = সকাল (shokal)\n\nI am learning Bangla\n--\nআমি বাংলা শিখছি (ami bangla shikhchhi)\nI = আমি (ami) · Bangla = বাংলা (bangla) · am learning = শিখছি (shikhchhi)\n\nI drink water\n--\nআমি পানি খাই (ami pani khai)\nI = আমি (ami) · drink = খাই (khai) · water = পানি (pani)\n\nI eat rice\n--\nআমি ভাত খাই (ami bhat khai)\nI = আমি (ami) · eat = খাই (khai) · rice = ভাত (bhat)\n\nThe food is good\n--\nখাবারটা ভালো (khabarta bhalo)\nthe food = খাবারটা (khabarta) · good = ভালো (bhalo)\n\nI am hungry\n--\nআমার খিদে পেয়েছে (amar khide peyechhe)\nI = আমার (amar) · hungry = খিদে (khide) · feel = পেয়েছে (peyechhe)\n\nWhere is the station?\n--\nস্টেশন কোথায়? (steshan kothay?)\nstation = স্টেশন (steshan) · where is = কোথায় (kothay)\n\nHow much is this?\n--\nএটা কত? (eta koto?)\nthis = এটা (eta) · how much = কত (koto)\n\nDo you speak English?\n--\nআপনি কি ইংরেজি বলেন? (apni ki ingreji bolen?)\nyou = আপনি (apni) · [question] = কি (ki) · English = ইংরেজি (ingreji) · speak = বলেন (bolen)\n\nI don't understand\n--\nআমি বুঝতে পারছি না (ami bujhte parchhi na)\nI = আমি (ami) · understand = বুঝতে পারছি (bujhte parchhi) · not = না (na)\n\nThank you very much\n--\nআপনাকে অনেক ধন্যবাদ (apnake onek dhonnobad)\nto you = আপনাকে (apnake) · much = অনেক (onek) · thanks = ধন্যবাদ (dhonnobad)\n\nWhere is your house?\n--\nতোমার বাড়ি কোথায়? (tomar bari kothay?)\nyour = তোমার (tomar) · house = বাড়ি (bari) · where is = কোথায় (kothay)\n\nI live in Dhaka\n--\nআমি ঢাকায় থাকি (ami dhakay thaki)\nI = আমি (ami) · in Dhaka = ঢাকায় (dhakay) · live = থাকি (thaki)\n\nPlease come in\n--\nভেতরে আসুন (bhetore ashun)\ninside = ভেতরে (bhetore) · please come = আসুন (ashun)\n\nSee you later\n--\nপরে দেখা হবে (pore dekha hobe)\nlater = পরে (pore) · see = দেখা (dekha) · will be = হবে (hobe)\n\nLet's go\n--\nচলো যাই (cholo jai)\nlet's = চলো (cholo) · go = যাই (jai)\n" },
+];
+
+/* ---------------- storage (IndexedDB; JSON-serializable records) ---------------- */
+
+const DB_NAME = "bangla-flash", STORE = "decks";
+const BUILTIN_SEEN_FLAG = "bangla-flash-builtins-v1";
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      if (!req.result.objectStoreNames.contains(STORE)) {
+        req.result.createObjectStore(STORE, { keyPath: "name" });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error || new Error("IndexedDB open failed"));
+  });
+}
+
+function txPromise(db, mode, fn) {
+  return new Promise((resolve, reject) => {
+    const t = db.transaction(STORE, mode);
+    const store = t.objectStore(STORE);
+    let out;
+    try { out = fn(store); } catch (e) { reject(e); return; }
+    if (out && typeof out === "object" && "result" in out) {
+      out.onsuccess = () => resolve(out.result === undefined ? undefined : out.result);
+      out.onerror = () => reject(out.error || new Error("IndexedDB request failed"));
+    } else {
+      t.oncomplete = () => resolve(out);
+      t.onerror = () => reject(t.error || new Error("IndexedDB transaction failed"));
+    }
+  });
+}
+
+function serializeRecord(name, text, state) {
+  // Plain-JSON round-trippable record (also used by node-stub storage tests).
+  return JSON.parse(JSON.stringify({ name, text, state: normalizeState(state), updatedAt: Date.now() }));
+}
+
+let _db = null;
+async function db() { if (!_db) _db = await openDB(); return _db; }
+async function storeList() { const d = await db(); return txPromise(d, "readonly", (s) => s.getAll()); }
+async function storeGet(name) {
+  const d = await db();
+  return new Promise((resolve, reject) => {
+    const t = d.transaction(STORE, "readonly");
+    const q = t.objectStore(STORE).get(name);
+    q.onsuccess = () => resolve(q.result || null);
+    q.onerror = () => reject(q.error);
+  });
+}
+async function storePut(rec) { const d = await db(); return txPromise(d, "readwrite", (s) => s.put(rec)); }
+async function storeDelete(name) { const d = await db(); return txPromise(d, "readwrite", (s) => s.delete(name)); }
+
+/* Seed every builtin deck missing from the store (fresh state), without
+   touching existing decks or their SRS state. A builtin the user deleted
+   stays deleted: names already seeded are remembered in localStorage, so
+   seeding never resurrects them and never duplicates.
+   Builtin refresh: when a stored deck's name matches a builtin but its
+   text differs (builtin content updated), the text is replaced and SRS
+   entries whose fronts no longer exist are pruned (count to console). */
+function getSeededBuiltinNames() {
+  try {
+    const v = JSON.parse(localStorage.getItem(BUILTIN_SEEN_FLAG) || "[]");
+    if (Array.isArray(v)) return new Set(v.filter((x) => typeof x === "string"));
+  } catch (e) { /* corrupt flag: reseed-if-missing below */ }
+  return new Set();
+}
+
+async function ensureSeeded() {
+  const seen = getSeededBuiltinNames();
+  let changed = false;
+  for (const b of BUILTIN_DECKS) {
+    const existing = await storeGet(b.name);
+    if (!existing) {
+      if (seen.has(b.name)) continue; // user-deleted builtin: stay deleted
+      await storePut(serializeRecord(b.name, b.text, makeEmptyState()));
+      seen.add(b.name);
+      changed = true;
+      continue;
+    }
+    if (existing.text !== b.text) {
+      // Builtin content updated: refresh text, prune orphaned SRS entries.
+      let pruned = 0;
+      try {
+        const keep = new Set(parseDeckText(b.text, b.name).map((c) => c.front));
+        const st = normalizeState(existing.state);
+        const entries = {};
+        for (const k of Object.keys(st.entries)) {
+          if (keep.has(k)) entries[k] = st.entries[k];
+          else pruned++;
+        }
+        existing.state = { entries, newDay: st.newDay, newCount: st.newCount };
+      } catch (e) {
+        existing.state = makeEmptyState();
+      }
+      existing.text = b.text;
+      existing.updatedAt = Date.now();
+      await storePut(existing);
+      console.log('Builtin "' + b.name + '" refreshed: replaced text, pruned ' +
+        pruned + ' orphaned state entries.');
+    }
+    if (!seen.has(b.name)) { seen.add(b.name); changed = true; }
+  }
+  if (changed) {
+    try { localStorage.setItem(BUILTIN_SEEN_FLAG, JSON.stringify([...seen])); } catch (e) {}
+  }
+}
+
+/* ---------------- UI ---------------- */
+
+const $ = (id) => document.getElementById(id);
+
+function show(id) {
+  for (const s of document.querySelectorAll(".screen")) s.classList.remove("active");
+  $(id).classList.add("active");
+}
+
+const session = {
+  deckName: null, cards: [], queue: [], idx: 0, revealed: false,
+  tally: { known: 0, hard: 0, unknown: 0 },
+  capLifted: false, capAsked: false, newFronts: null,
+  state: makeEmptyState(),
+};
+
+/* New cards introduced so far today (rollover-aware; 0 after a date change). */
+function newUsedToday(nowMs) {
+  const st = session.state || makeEmptyState();
+  return (st.newDay === todayString(nowMs)) ? st.newCount : 0;
+}
+
+/* How many new cards from session.idx onward are still unpresented. */
+function countRemainingNew() {
+  let n = 0;
+  for (let j = session.idx; j < session.queue.length; j++) {
+    if (session.newFronts && session.newFronts.has(session.queue[j].front)) n++;
+  }
+  return n;
+}
+
+/* Present the card at session.idx, enforcing the daily new-card cap at
+   introduction time: when the next card to present is new and 20 were
+   already introduced today, ask once per session (continue = lift the cap;
+   due-cards-only = drop the remaining new cards; dismiss = quit, saved). */
+async function presentCurrent() {
+  while (session.idx < session.queue.length) {
+    const card = session.queue[session.idx];
+    const isNew = !!session.newFronts && session.newFronts.has(card.front);
+    if (isNew && !session.capLifted && !session.capAsked &&
+        newUsedToday(Date.now()) >= NEW_PER_DAY) {
+      session.capAsked = true;
+      const remaining = countRemainingNew();
+      const more = window.confirm("Daily new-card limit (" + NEW_PER_DAY +
+        ") reached. Learn " + remaining + " more new card(s)?");
+      if (more) {
+        session.capLifted = true;
+      } else if (window.confirm("Continue with due cards only? (Cancel quits the session.)")) {
+        session.queue = session.queue.slice(0, session.idx).concat(
+          session.queue.slice(session.idx).filter((c) => !session.newFronts.has(c.front)));
+        if (session.idx >= session.queue.length) { await finishStudy(); return; }
+        continue;
+      } else {
+        await quitStudy();
+        return;
+      }
+    }
+    if (isNew) {
+      // Introduced now, before grading (counts even if quit via Esc after).
+      session.state = noteNewIntroduced(session.state, Date.now());
+    }
+    renderCard();
+    return;
+  }
+  await finishStudy();
+}
+
+function applyFontPrefs() {
+  const fam = localStorage.getItem("ff-family") || "Noto Serif Bengali";
+  const size = localStorage.getItem("ff-size") || "56";
+  document.documentElement.style.setProperty("--card-font", '"' + fam + '", "Noto Serif Bengali", serif');
+  document.documentElement.style.setProperty("--card-size", size + "px");
+  const sel = $("font-family");
+  if (sel && sel.tagName === "SELECT") {
+    let found = false;
+    for (const o of sel.options) { if (o.value === fam) { found = true; break; } }
+    if (!found) {
+      const opt = document.createElement("option");
+      opt.value = fam;
+      opt.textContent = fam;
+      sel.appendChild(opt);
+    }
+    sel.value = fam;
+  } else if (sel) {
+    sel.value = fam;
+  }
+  $("font-size").value = size;
+  $("font-size-val").textContent = size + "px";
+}
+
+const FONT_FALLBACKS = ["Noto Serif Bengali", "Noto Sans Bengali", "serif", "sans-serif", "monospace"];
+let _fontsLoaded = false;
+/* Lazily enumerate local fonts (permission-gated); fall back gracefully. */
+async function loadLocalFonts() {
+  if (_fontsLoaded) return;
+  _fontsLoaded = true;
+  try {
+    if (typeof window.queryLocalFonts !== "function") return;
+    try {
+      if (navigator.permissions && typeof navigator.permissions.query === "function") {
+        const st = await navigator.permissions.query({ name: "local-fonts" });
+        if (st && st.state === "denied") return;
+      }
+    } catch (e) { /* permission query unsupported: try anyway */ }
+    const fonts = await window.queryLocalFonts();
+    if (!Array.isArray(fonts) || !fonts.length) return;
+    const sel = $("font-family");
+    const seen = new Set();
+    for (const o of sel.options) seen.add(o.value);
+    const names = [];
+    for (const f of fonts) {
+      const fam = f && f.family;
+      if (typeof fam !== "string" || !fam.trim()) continue;
+      if (seen.has(fam)) continue;
+      seen.add(fam);
+      names.push(fam);
+    }
+    names.sort((a, b) => a.localeCompare(b));
+    for (const n of names.slice(0, 500)) {
+      const opt = document.createElement("option");
+      opt.value = n;
+      opt.textContent = n;
+      sel.appendChild(opt);
+    }
+    // Re-apply stored value in case it matches a newly listed font.
+    const fam = localStorage.getItem("ff-family") || "Noto Serif Bengali";
+    sel.value = fam;
+  } catch (e) {
+    // Graceful fallback: keep the curated list.
+  }
+}
+
+/* Download a per-deck versioned JSON backup as <name>.json. */
+async function exportDeck(name) {
+  const rec = await storeGet(name);
+  if (!rec) return;
+  const payload = { format: 1, name: rec.name, text: rec.text,
+    state: normalizeState(rec.state), exportedAt: Date.now() };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = rec.name.replace(/[^\w\-]+/g, "_") + ".json";
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+
+/* Focus mode: hide page header/footer (title, subtitle, font bar), keep all study buttons. */
+let focusMode = false;
+function setFocusMode(on) {
+  focusMode = !!on;
+  const sc = $("screen-study");
+  if (sc) sc.classList.toggle("focus", focusMode);
+  document.body.classList.toggle("focus", focusMode);
+  const enter = $("study-focus"), exit = $("study-unfocus");
+  if (enter) enter.hidden = focusMode;
+  if (exit) exit.hidden = !focusMode;
+}
+
+async function refreshDeckList() {
+  const list = await storeList();
+  list.sort((a, b) => a.name.localeCompare(b.name));
+  const box = $("decklist");
+  box.innerHTML = "";
+  if (!list.length) {
+    box.innerHTML = '<p class="hint">No decks yet. Add one below.</p>';
+    return;
+  }
+  const now = Date.now();
+  for (const rec of list) {
+    let cards = [];
+    try { cards = parseDeckText(rec.text, rec.name); } catch (e) { /* show as broken */ }
+    const st = normalizeState(rec.state);
+    const cls = classifyCards(cards, st, now);
+    const div = document.createElement("div");
+    div.className = "deck";
+    const grow = document.createElement("div");
+    grow.className = "grow";
+    const nm = document.createElement("div");
+    nm.className = "name";
+    nm.textContent = rec.name;
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    meta.textContent = cards.length + " cards · " + cls.due.length + " due · " + cls.fresh.length + " new";
+    grow.appendChild(nm); grow.appendChild(meta);
+    const study = document.createElement("button");
+    study.textContent = "Study";
+    study.addEventListener("click", () => openStart(rec.name));
+    const exp = document.createElement("button");
+    exp.textContent = "Export";
+    exp.setAttribute("aria-label", 'Export deck "' + rec.name + '"');
+    exp.addEventListener("click", () => exportDeck(rec.name));
+    const del = document.createElement("button");
+    del.textContent = "Delete";
+    del.className = "danger";
+    del.addEventListener("click", async () => {
+      if (!window.confirm('Delete deck "' + rec.name + '"?')) return;
+      await storeDelete(rec.name);
+      await refreshDeckList();
+    });
+    div.appendChild(grow); div.appendChild(study); div.appendChild(exp); div.appendChild(del);
+    box.appendChild(div);
+  }
+}
+
+async function openStart(name) {
+  session.deckName = name;
+  session.capLifted = false;
+  session.capAsked = false;
+  const rec = await storeGet(name);
+  if (!rec) { await refreshDeckList(); show("screen-decks"); return; }
+  $("start-title").textContent = name;
+  const now = Date.now();
+  let cards = [];
+  try { cards = parseDeckText(rec.text, name); } catch (e) {
+    $("start-counts").textContent = "This deck has a parse error: " + e.message;
+    $("start-begin").disabled = true;
+    show("screen-start");
+    return;
+  }
+  $("start-begin").disabled = false;
+  const cls = classifyCards(cards, normalizeState(rec.state), now);
+  $("start-counts").textContent = cards.length + " cards · " + cls.due.length +
+    " due · " + cls.fresh.length + " new · " + cls.future.length + " later";
+  $("start-msg").textContent = "";
+  show("screen-start");
+}
+
+async function beginStudy() {
+  const rec = await storeGet(session.deckName);
+  if (!rec) return;
+  const mode = (document.querySelector('input[name="mode"]:checked') || {}).value === "ordered" ? "ordered" : "shuffled";
+  const now = Date.now();
+  const cards = parseDeckText(rec.text, rec.name);
+  session.cards = cards;
+  session.state = normalizeState(rec.state);
+  session.tally = { known: 0, hard: 0, unknown: 0 };
+  session.idx = 0;
+  session.revealed = false;
+  session.capLifted = false;
+  session.capAsked = false;
+  // Full queue: ALL due + ALL new. The daily cap gates introduction time.
+  const q = selectQueue(cards, session.state, now, { mode });
+  session.queue = q.queue;
+  session.newFronts = new Set();
+  for (const c of session.queue) {
+    if (!session.state.entries[c.front]) session.newFronts.add(c.front);
+  }
+  if (!session.queue.length) {
+    // "All caught up!" empty-queue screen (reuse summary screen).
+    setFocusMode(false);
+    $("summary-title").textContent = "All caught up!";
+    $("st-reviewed").textContent = "0";
+    $("st-known").textContent = "0";
+    $("st-hard").textContent = "0";
+    $("st-unknown").textContent = "0";
+    $("st-acc").textContent = "0%";
+    $("st-due24").textContent = String(dueWithinMs(cards, session.state, now, DAY_MS));
+    const bc = boxCounts(cards, session.state);
+    $("st-boxes").textContent = "Box 1: " + bc[1] + " · Box 2: " + bc[2] + " · Box 3: " + bc[3] +
+      " · Box 4: " + bc[4] + " · Box 5: " + bc[5] + " · New: " + bc.fresh;
+    show("screen-summary");
+    return;
+  }
+  setFocusMode(false);
+  show("screen-study");
+  await presentCurrent();
+}
+
+function renderCard() {
+  const total = session.queue.length;
+  $("study-progress").textContent = "Card " + (session.idx + 1) + "/" + total;
+  const card = session.queue[session.idx];
+  $("card-label").textContent = "Front";
+  $("card-front").textContent = card.front;
+  $("card-front").hidden = false;
+  $("card-back").textContent = "";
+  $("card-back").hidden = true;
+  session.revealed = false;
+  $("btn-show").hidden = false;
+  $("btn-known").hidden = true;
+  $("btn-hard").hidden = true;
+  $("btn-unknown").hidden = true;
+}
+
+function revealCard() {
+  if (session.revealed) return;
+  const card = session.queue[session.idx];
+  if (!card) return;
+  session.revealed = true;
+  $("card-label").textContent = "Front + Back";
+  $("card-back").textContent = card.back;
+  $("card-back").hidden = false;
+  $("btn-show").hidden = true;
+  $("btn-known").hidden = false;
+  $("btn-hard").hidden = false;
+  $("btn-unknown").hidden = false;
+}
+
+async function persistSessionState() {
+  if (!session.deckName) return;
+  const rec = await storeGet(session.deckName);
+  if (!rec) return;
+  rec.state = session.state;
+  rec.updatedAt = Date.now();
+  await storePut(rec);
+}
+
+async function gradeCurrent(rating) {
+  if (!session.revealed) return;
+  const card = session.queue[session.idx];
+  if (!card) return;
+  session.state = gradeState(session.state, card.front, rating, Date.now());
+  session.tally[rating]++;
+  await persistSessionState();
+  session.idx++;
+  await presentCurrent();
+}
+
+async function finishStudy() {
+  setFocusMode(false);
+  const now = Date.now();
+  const reviewed = session.tally.known + session.tally.hard + session.tally.unknown;
+  $("summary-title").textContent = "Session complete";
+  $("st-reviewed").textContent = String(reviewed);
+  $("st-known").textContent = String(session.tally.known);
+  $("st-hard").textContent = String(session.tally.hard);
+  $("st-unknown").textContent = String(session.tally.unknown);
+  $("st-acc").textContent = Math.round(accuracy(session.tally) * 100) + "%";
+  $("st-due24").textContent = String(dueWithinMs(session.cards, session.state, now, DAY_MS));
+  const bc = boxCounts(session.cards, session.state);
+  $("st-boxes").textContent = "Box 1: " + bc[1] + " · Box 2: " + bc[2] + " · Box 3: " + bc[3] +
+    " · Box 4: " + bc[4] + " · Box 5: " + bc[5] + " · New: " + bc.fresh;
+  show("screen-summary");
+}
+
+async function quitStudy() {
+  setFocusMode(false);
+  await persistSessionState();
+  await openStart(session.deckName);
+}
+
+function wire() {
+  $("add-save").addEventListener("click", async () => {
+    const name = $("add-name").value.trim();
+    const text = $("add-text").value;
+    const msg = $("add-msg");
+    if (!name) { msg.textContent = "Give the deck a name first."; msg.className = "err"; return; }
+    let cards;
+    try { cards = parseDeckText(text, name); } catch (e) {
+      msg.textContent = "Import rejected: " + e.message; msg.className = "err"; return;
+    }
+    if (!cards.length) { msg.textContent = 'Import rejected: Deck "' + name + '" has no cards.'; msg.className = "err"; return; }
+    const existing = await storeGet(name);
+    if (existing && !window.confirm('Deck "' + name + '" exists. Overwrite?')) return;
+    await storePut(serializeRecord(name, text, existing ? normalizeState(existing.state) : makeEmptyState()));
+    msg.textContent = "Saved " + cards.length + " cards to \"" + name + "\".";
+    msg.className = "ok";
+    $("add-name").value = "";
+    $("add-text").value = "";
+    await refreshDeckList();
+  });
+
+  $("start-back").addEventListener("click", async () => { await refreshDeckList(); show("screen-decks"); });
+  $("start-begin").addEventListener("click", beginStudy);
+
+  /* Unified home-screen import: .json backup (format:1) or .txt deck text, by content. */
+  $("unified-import").addEventListener("change", async () => {
+    const f = $("unified-import").files[0];
+    if (!f) return;
+    const msg = $("add-msg");
+    try {
+      const raw = await f.text();
+      let asJson = null, looksBackup = false;
+      try {
+        asJson = JSON.parse(raw);
+        looksBackup = !!(asJson && typeof asJson === "object" && asJson.format === 1);
+      } catch (e) { looksBackup = false; }
+      if (looksBackup) {
+        const b = parseBackup(asJson);
+        const cards = parseDeckText(b.text, b.name); // re-validate; rejects bad decks
+        if (!cards.length) throw new Error('Backup: deck "' + b.name + '" has no cards.');
+        const existing = await storeGet(b.name);
+        if (existing && !window.confirm('Deck "' + b.name + '" exists. Overwrite?')) return;
+        await storePut(serializeRecord(b.name, b.text, b.state));
+        msg.textContent = 'Imported backup "' + b.name + '" (' + cards.length + " cards).";
+        msg.className = "ok";
+        await refreshDeckList();
+      } else {
+        // Deck text path: same parse/validate/reject as paste import.
+        const base = (f.name || "").replace(/\.[^.]+$/, "").trim();
+        const typed = $("add-name").value.trim();
+        const name = typed || base;
+        if (!name) {
+          msg.textContent = "Import rejected: give the deck a name first (or rename the file).";
+          msg.className = "err";
+          return;
+        }
+        let cards;
+        try { cards = parseDeckText(raw, name); } catch (e) {
+          msg.textContent = "Import rejected: " + e.message; msg.className = "err"; return;
+        }
+        if (!cards.length) { msg.textContent = 'Import rejected: Deck "' + name + '" has no cards.'; msg.className = "err"; return; }
+        const existing = await storeGet(name);
+        if (existing && !window.confirm('Deck "' + name + '" exists. Overwrite?')) return;
+        await storePut(serializeRecord(name, raw, existing ? normalizeState(existing.state) : makeEmptyState()));
+        $("add-name").value = "";
+        $("add-text").value = raw;
+        msg.textContent = "Saved " + cards.length + ' cards to "' + name + '".';
+        msg.className = "ok";
+        await refreshDeckList();
+      }
+    } catch (e) {
+      msg.textContent = "Import rejected: " + (e && e.message ? e.message : e);
+      msg.className = "err";
+    }
+    $("unified-import").value = "";
+  });
+
+  $("btn-show").addEventListener("click", revealCard);
+  $("btn-known").addEventListener("click", () => gradeCurrent("known"));
+  $("btn-hard").addEventListener("click", () => gradeCurrent("hard"));
+  $("btn-unknown").addEventListener("click", () => gradeCurrent("unknown"));
+  $("study-quit").addEventListener("click", quitStudy);
+  $("study-focus").addEventListener("click", () => setFocusMode(true));
+  $("study-unfocus").addEventListener("click", () => setFocusMode(false));
+
+  $("summary-again").addEventListener("click", async () => { await openStart(session.deckName); await beginStudy(); });
+  $("summary-decks").addEventListener("click", async () => { await refreshDeckList(); show("screen-decks"); });
+
+  document.addEventListener("keydown", (e) => {
+    if (!$("screen-study").classList.contains("active")) {
+      if (e.key === "Escape" && $("screen-summary").classList.contains("active")) { $("summary-decks").click(); }
+      return;
+    }
+    if (e.key === "f" || e.key === "F") { setFocusMode(!focusMode); return; }
+    if (e.code === "Space" && !session.revealed) { e.preventDefault(); revealCard(); }
+    else if (session.revealed && e.key === "1") gradeCurrent("known");
+    else if (session.revealed && e.key === "2") gradeCurrent("hard");
+    else if (session.revealed && e.key === "3") gradeCurrent("unknown");
+    else if (e.key === "Escape") quitStudy();
+  });
+
+  $("font-family").addEventListener("change", () => {
+    localStorage.setItem("ff-family", $("font-family").value.trim() || "Noto Serif Bengali");
+    applyFontPrefs();
+  });
+  // Lazy Local Font Access enumeration: only on first interaction with the dropdown.
+  $("font-family").addEventListener("pointerdown", loadLocalFonts);
+  $("font-family").addEventListener("focus", loadLocalFonts);
+  $("font-size").addEventListener("input", () => {
+    localStorage.setItem("ff-size", $("font-size").value);
+    applyFontPrefs();
+  });
+
+  window.addEventListener("beforeunload", () => {
+    // Best-effort synchronous note: real persistence already happens after
+    // every grade; nothing asynchronous can be awaited here.
+  });
+}
+
+window.addEventListener("DOMContentLoaded", async () => {
+  applyFontPrefs();
+  wire();
+  try {
+    await ensureSeeded();
+  } catch (e) {
+    // IndexedDB unavailable (rare): deck list will simply render empty.
+  }
+  await refreshDeckList();
+});
+
+/* Exposed for headless testing (pure core only — no DOM/IDB here). */
+window.__flash = {
+  parseDeckText, classifyCards, selectQueue, gradeState, boxCounts,
+  dueWithinMs, accuracy, newBudgetFor, noteNewIntroduced,
+  makeEmptyState, normalizeState,
+  parseBackup, serializeRecord, todayString,
+  INTERVALS_DAYS, NEW_PER_DAY, DAY_MS, STARTER_TEXT, STARTER_NAME, BUILTIN_DECKS,
+};
+</script>
+</body>
+</html>
