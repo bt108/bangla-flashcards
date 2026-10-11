@@ -1,49 +1,75 @@
 # Bangla Flashcards
 
-Offline, single-file flashcard app for learning Bangla — Leitner spaced
-repetition, English ⇄ Bangla. No build step, no network, no dependencies:
-open `index.html` and study.
+[![license MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![offline single file](https://img.shields.io/badge/offline-single--file%20HTML-blue)](https://bt108.github.io/bangla-flashcards/)
 
-**Live demo:** `https://bt108.github.io/bangla-flashcards/`
+An offline, single-file flashcard app for learning Bangla — Leitner spaced
+repetition, English ⇄ Bangla. No build step, no network, no dependencies.
+For Bangla learners studying vocabulary, letters, conjuncts, and sentences
+with daily reviews.
+
+**Live demo:** https://bt108.github.io/bangla-flashcards/
 (served straight from this repo via GitHub Pages)
 
-## Features
+## 30-second example
 
-- **Leitner-5 SRS** — 5 boxes, intervals 1/3/7/14/30 days; Known → box+1,
-  Hard → box−1, Unknown → box 1; max 20 new cards introduced per day.
-- **Ships with 4 builtin decks** — starter vocabulary (50 words), Bangla
-  letters (60 cards), combined forms / conjuncts (81 cards), sentences (20).
-- **Deck import** — paste text or drop a `.txt` file. Format: blank line
-  separates cards, one `--` line splits front from back, either side may
-  span lines, `#` headers allowed. Whole import rejected with a
-  deck + card + line-range error on any violation.
-- **JSON backup / restore** — per-deck export with versioned format and full
-  SRS state; re-validated on import.
-- **Persistence** — decks + per-card `{box, due}` state in IndexedDB,
-  typography prefs in localStorage. Seeded builtins never resurrect
-  user-deleted decks.
-- **Study UX** — shuffled or in-order mode, focus mode (`F`), keyboard
-  grading (`Space`, `1/2/3`, `Esc`), session summary with accuracy, boxes,
-  and 24h-due counts.
-- **Typography controls** — card font family/size, including Local Font
-  Access enumeration for system Bengali fonts.
+Deck text — blank line separates cards, `--` splits front from back:
 
-## Run
+```text
+Hello
+--
+হ্যালো (hyalo)
 
-No toolchain. Open `index.html` in any modern browser, or serve it:
+Thank you
+--
+ধন্যবাদ (dhonnobad)
+```
 
 ```sh
-cd bangla-flashcards
 python3 -m http.server 8000
-# → http://localhost:8000
+# → http://localhost:8000 — paste the snippet into "Add deck", Save deck,
+#   then Study. (Or just open index.html in a browser; no server needed.)
 ```
+
+Decks and review state persist in the browser (IndexedDB).
+
+## Sample output
+
+Seeded with the 4 builtin decks, rendered in Chromium:
+
+| Desktop | Mobile |
+|---|---|
+| ![Deck list on desktop](docs/img/decks.png) | ![Deck list on mobile](docs/img/mobile.png) |
+
+## Prerequisites
+
+- A modern browser — runs the app. Deck data and per-card review state use
+  IndexedDB; typography prefs use localStorage.
+- Python 3 *(optional)* — only for `python3 -m http.server` local hosting;
+  opening `index.html` directly works too.
+- A Bengali font *(optional)* — card font/size are adjustable in the footer
+  bar, including system Bengali fonts via Local Font Access where supported.
+
+## Commands
+
+No build step and no scripts. Two ways to run:
+
+```sh
+python3 -m http.server 8000   # serve locally → http://localhost:8000
+```
+
+or open `index.html` in any modern browser.
+
+Keyboard: `Space` reveal · `1` Known · `2` Hard · `3` Unknown · `F` focus ·
+`Esc` quit.
 
 ## Project layout
 
 ```
-index.html   the entire app: CSS + UI + pure SRS core + storage
-README.md    this file
-LICENSE      MIT
+index.html          # the entire app: CSS + UI + SRS core + storage
+docs/img/           # decks.png + mobile.png renders for this README
+LICENSE             # MIT
+README.md           # this file
 ```
 
 The SRS core (`parseDeckText`, `selectQueue`, `gradeState`, …) is DOM-free
@@ -65,9 +91,23 @@ Next front
 Next back
 ```
 
-Fronts must be unique within a deck.
+Fronts must be unique within a deck. Any violation rejects the whole import
+with a deck + card + line-range error.
 
-## Status
+## Content model
 
-Working offline app, used for real Bangla study. Single file by design —
-easy to copy, share, and host anywhere.
+- **Decks** are plain text in `flashdeck-v1` format; 4 builtin decks ship
+  inside `index.html` (starter vocabulary 50, letters 60, conjuncts 81,
+  sentences 20).
+- **Leitner-5 SRS**: 5 boxes, review intervals 1/3/7/14/30 days. Known →
+  box+1, Hard → box−1, Unknown → box 1; at most 20 new cards per day.
+- **Study queue** is one pass over all due + all new cards, shuffled by
+  default or in deck order.
+- **State** (`{box, due}` per card plus the daily-new counter) persists to
+  IndexedDB after every grade; JSON backup/restore re-validates on import.
+- **Session summary** reports reviewed/known/hard/unknown, accuracy, boxes,
+  and 24h-due counts.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
